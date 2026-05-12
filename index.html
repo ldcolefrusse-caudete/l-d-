@@ -248,24 +248,43 @@ function today(){var d=new Date();return d.getFullYear()+'-'+(('0'+(d.getMonth()
 function fmtT(s){s=parseInt(s)||0;var m=Math.floor(s/60),sc=s%60;return(m<10?'0':'')+m+':'+(sc<10?'0':'')+sc;}
 function fmtIso(d){return d.getFullYear()+'-'+(('0'+(d.getMonth()+1)).slice(-2))+'-'+(('0'+d.getDate()).slice(-2));}
 
-/*// FUNCIÓN API CORREGIDA (Evita "Uncaught Gs")
-function api(action,payload,cb){
-  try {
-    var safePayload = payload ? JSON.parse(JSON.stringify(payload)) : {};
-    google.script.run
-      .withSuccessHandler(function(r){if(cb)cb(r);})
-      .withFailureHandler(function(e){
-        var msg=e&&e.message?e.message:String(e);
-        var main=G('main');
-        if(main&&action==='getDashboard'){main.innerHTML='<div class="card" style="color:var(--danger);padding:20px"><strong>Error:</strong> '+msg+'</div>';}
-        toast(msg,false);if(cb)cb(null);
-      })
-      .api(TOKEN,action,safePayload);
-  } catch(err) {
-    console.error(err); toast("Error interno de datos", false);
+// ============================================================
+// PASARELA DE COMUNICACIÓN CON GOOGLE (AHORA CON TOKEN VIP)
+// ============================================================
+function api(accion, payload, callback) {
+  var datosBody = {
+    accion: accion,
+    payload: payload || {}
+  };
+
+  // 🔥 EL TRUCO DE MAGIA: Si ya hemos iniciado sesión, adjuntamos el pase VIP
+  if (typeof TOKEN !== 'undefined' && TOKEN) {
+    datosBody.sesion = TOKEN; 
   }
+
+  // Preparamos el envío. Usamos text/plain para que Google no bloquee el CORS
+  var opciones = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8' 
+    },
+    body: JSON.stringify(datosBody)
+  };
+
+  // Hacemos la llamada al servidor
+  fetch(BACKEND_URL, opciones)
+    .then(function(respuesta) {
+       return respuesta.json(); // Intentamos leer lo que nos devuelve Google
+    })
+    .then(function(datosJSON) {
+       if (callback) callback(datosJSON);
+    })
+    .catch(function(error) {
+       console.error("Error de conexión:", error);
+       if (callback) callback({ ok: false, msg: "Fallo de conexión con el servidor." });
+    });
 }
-*/
+
 // ============================================================
 // CONEXIÓN CON EL CEREBRO DE GOOGLE APPS SCRIPT
 // ============================================================
