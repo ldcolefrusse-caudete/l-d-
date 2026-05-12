@@ -248,47 +248,35 @@ function today(){var d=new Date();return d.getFullYear()+'-'+(('0'+(d.getMonth()
 function fmtT(s){s=parseInt(s)||0;var m=Math.floor(s/60),sc=s%60;return(m<10?'0':'')+m+':'+(sc<10?'0':'')+sc;}
 function fmtIso(d){return d.getFullYear()+'-'+(('0'+(d.getMonth()+1)).slice(-2))+'-'+(('0'+d.getDate()).slice(-2));}
 
-// ============================================================
-// PASARELA DE COMUNICACIÓN CON GOOGLE (AHORA CON TOKEN VIP)
-// ============================================================
+/*// FUNCIÓN API CORREGIDA (Evita "Uncaught Gs")
 function api(accion, payload, callback) {
   var datosBody = {
     accion: accion,
     payload: payload || {}
   };
 
-  // 🔥 EL TRUCO DE MAGIA: Si ya hemos iniciado sesión, adjuntamos el pase VIP
+  // 🔥 CAMBIO CLAVE: Usamos la palabra exacta "token" en minúsculas
   if (typeof TOKEN !== 'undefined' && TOKEN) {
-    datosBody.sesion = TOKEN; 
+    datosBody.token = TOKEN; 
   }
 
-  // Preparamos el envío. Usamos text/plain para que Google no bloquee el CORS
-  var opciones = {
+  fetch(BACKEND_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8' 
-    },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(datosBody)
-  };
-
-  // Hacemos la llamada al servidor
-  fetch(BACKEND_URL, opciones)
-    .then(function(respuesta) {
-       return respuesta.json(); // Intentamos leer lo que nos devuelve Google
-    })
-    .then(function(datosJSON) {
-       if (callback) callback(datosJSON);
-    })
-    .catch(function(error) {
-       console.error("Error de conexión:", error);
-       if (callback) callback({ ok: false, msg: "Fallo de conexión con el servidor." });
-    });
+  })
+  .then(function(response) { return response.json(); })
+  .then(function(data) { if (callback) callback(data); })
+  .catch(function(error) {
+    console.error("Error de red:", error);
+    if (callback) callback({ok: false, msg: 'Error conectando con el servidor.'});
+  });
 }
 
 // ============================================================
 // CONEXIÓN CON EL CEREBRO DE GOOGLE APPS SCRIPT
 // ============================================================
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzYKda3mU_oJwKsMlRzj8suaDEltXaNtqhxqqjkFLmb5_80Dw_ZQt8g-DDXdkyH9zZi/exec";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzsYIGVHMU_1clllyk5lck_nPTNK_YFVMJ7etTarEvNMQlYhbznH5kYGo_8FqukDpo3/exec";
 
 function api(accion, payload, callback) {
   var token = window.TOKEN_SESION || localStorage.getItem('token_cleanops') || ''; 
@@ -327,42 +315,16 @@ function mkFg(lbl,inputHtml){var d=document.createElement('div');d.className='fg
 
 // APP Y LOGIN
 G('lpp').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-
 function doLogin(){
-  var u = G('luu').value.trim(), p = G('lpp').value;
-  var err = G('lerr'), btn = G('lbtn');
-  
-  err.style.display = 'none';
-  
-  if(!u || !p){
-    err.textContent = 'Introduce usuario y contraseña';
-    err.style.display = 'block';
-    return;
-  }
-  
-  btn.textContent = 'Verificando...';
-  btn.disabled = true;
-  
-  // ✅ NUEVA FORMA: Conexión externa usando tu función API
-  api('login', { u: u, p: p }, function(r) {
-    btn.textContent = 'Iniciar sesión';
-    btn.disabled = false;
-    
-    // Fallo de conexión o credenciales incorrectas
-    if(!r || !r.ok){
-      err.textContent = r ? r.msg : 'Sin respuesta del servidor';
-      err.style.display = 'block';
-      return;
-    }
-    
-    // Éxito: Guardamos datos del usuario y arrancamos la App
-    TOKEN = r.token;
-    ROL = (r.usuario.rol || '').toLowerCase().replace(/ /g,'_');
-    NOMBRE = r.usuario.nombre;
-    UID = r.usuario.id;
-    
+  var u=G('luu').value.trim(),p=G('lpp').value;var err=G('lerr'),btn=G('lbtn');err.style.display='none';
+  if(!u||!p){err.textContent='Introduce usuario y contraseña';err.style.display='block';return;}
+  btn.textContent='Verificando...';btn.disabled=true;
+  google.script.run.withSuccessHandler(function(r){
+    btn.textContent='Iniciar sesión';btn.disabled=false;
+    if(!r||!r.ok){err.textContent=r?r.msg:'Sin respuesta';err.style.display='block';return;}
+    TOKEN=r.token;ROL=(r.usuario.rol||'').toLowerCase().replace(/ /g,'_');NOMBRE=r.usuario.nombre;UID=r.usuario.id;
     startApp(r.usuario);
-  });
+  }).withFailureHandler(function(e){btn.textContent='Iniciar sesión';btn.disabled=false;err.textContent='Error: '+(e.message||String(e));err.style.display='block';}).login(u,p);
 }
 function startApp(u){
   G('ls').style.display='none';
@@ -5273,7 +5235,7 @@ function renderCuerpoZonaSync(zonaId, zonaNombre, subzonas) {
 // ============================================================
 
 // 1. Configuración del Reconocimiento de Voz del navegador
-
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognitionIA;
 let isRecordingIA = false;
 
